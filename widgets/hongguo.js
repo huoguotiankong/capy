@@ -56,7 +56,7 @@ var WidgetMetadata = {
   title: "红果短剧",
   description: "官网分类、搜索、跨季导航与官网已开放集直链；完整剧集播放需合法可用的流服务。",
   author: "MX / huoguotiankong",
-  version: "0.2.0",
+  version: "0.2.1",
   icon: "https://syimg.3dmgame.com/uploadimg/ico/2024/0524/1716534162709037.png",
   site: HG_SITE,
   modules: [
@@ -202,16 +202,23 @@ function hgDetailHTML(html,sid) {
   return {series_id:sid,series_name:title,series_intro:desc,series_cover:cover,
     episode_cnt:count?Number(count[1]):0,vid_list:[]};
 }
+
+var HG_PAGE_CACHE = {};
 async function hgPageResponse(url, bot) {
+  var cached=HG_PAGE_CACHE[url];
+  if(!bot && cached && Date.now()-cached.at<15000)return cached.data;
   var hdr=Object.assign({},HG_HEADERS);
   if(bot)hdr["User-Agent"]="Googlebot";
-  var data=await hgGet(url,hdr);
-  if(data && typeof data==="object" && data.loaderData)return {router:data,html:""};
+  var raw=await hgGet(url,hdr);
+  var data=raw;
   if(data && typeof data==="object" && typeof data.html==="string")data=data.html;
   var html=typeof data==="string"?data:"";
   var router=null;
-  try{router=hgRouter(data);}catch(_){}
-  return {router:router,html:html};
+  if(data && typeof data==="object" && data.loaderData)router=data;
+  else try{router=hgRouter(data);}catch(_){}
+  var obj={router:router,html:html};
+  if(!bot)HG_PAGE_CACHE[url]={at:Date.now(),data:obj};
+  return obj;
 }
 async function hgHomeCategory(route) {
   var p=await hgPageResponse(HG_SITE+"/",false);
@@ -428,7 +435,8 @@ function hgSeasonReferences(sd,html) {
       var url=hgDecode(m[2]),id=/\/player\/(\d+)(?:\/|[?#]|$)/.exec(url)
         || /[?&]series_id=(\d+)/.exec(url);
       if(!id)continue;
-      var img=/<img\b[^>]*>/i.exec(m[3]),tag=img?img[0]:"",name=hgAttr(tag,"alt")||hgText(m[3]);
+      var img=/<img\b[^>]*>/i.exec(m[3]),tag=img?img[0]:"",name=hgAttr(tag,"alt");
+      if(name.indexOf(base)<0)name=hgText(m[3]);
       var cover=hgAttr(tag,"src")||hgAttr(tag,"data-src");
       if(cover.indexOf("//")===0)cover="https:"+cover;
       if(cover.charAt(0)==="/")cover=HG_SITE+cover;
@@ -468,31 +476,58 @@ function hgValidVideoURL(input) {
   if(/\.(?:jpg|jpeg|png|webp|svg|gif)(?:[?#]|$)/i.test(url))return "";
   return url;
 }
+
+function hgVideoValue(value,depth) {
+  if(depth>5||value===null||value===undefined)return "";
+  if(typeof value==="string"){
+    var valueURL=hgValidVideoURL(value);
+    if(valueURL)return valueURL;
+    if(value.charAt(0)==="{")try{return hgVideoValue(JSON.parse(value),depth+1);}catch(_){}
+    return "";
+  }
+  if(Array.isArray(value)){
+    for(var i=0;i<value.length && i<12;i++){
+      var nested=hgVideoValue(value[i],depth+1);
+      if(nested)return nested;
+    }
+    return "";
+  }
+  if(typeof value==="object"){
+    var keys=["main_url","mainUrl","video_url","videoUrl","url_list","urlList",
+      "backup_url","backup_url_1","play_addr","play_url","download_url","url"];
+    for(var j=0;j<keys.length;j++){
+      if(value[keys[j]]!==undefined) {
+        var found=hgVideoValue(value[keys[j]],depth+1);
+        if(found)return found;
+      }
+    }
+  }
+  return "";
+}
 function hgDeepVideo(obj) {
   if(!obj||typeof obj!=="object")return "";
   var stack=[obj],visited=0;
   while(stack.length && visited++<400){
     var current=stack.shift();
     if(!current||typeof current!=="object")continue;
-    // Check only known video transport fields. Never accidentally use covers.
-    var candidates=[current.main_url,current.mainUrl,current.video_url,current.videoUrl,
-      current.backup_url,current.play_url];
-    for(var k=0;k<candidates.length;k++){
-      var direct=hgValidVideoURL(candidates[k]);
+    // Prioritize video_player_info to avoid grabbing unrelated trailer media.
+    if(current.video_player_info){
+      var direct=hgVideoValue(current.video_player_info,0);
       if(direct)return direct;
     }
-    var urls=current.url_list;
-    if(Array.isArray(urls))for(var j=0;j<urls.length;j++){
-      var u=hgValidVideoURL(urls[j]);
-      if(u)return u;
+    if(current.videoPlayerInfo){
+      var alt=hgVideoValue(current.videoPlayerInfo,0);
+      if(alt)return alt;
     }
-    if(Array.isArray(current)){
+    if(current.main_url||current.video_url||current.play_addr){
+      var directObj=hgVideoValue(current,0);
+      if(directObj)return directObj;
+    }
+    if(Array.isArray(current))
       current.slice(0,10).forEach(function(x){if(x&&typeof x==="object")stack.push(x);});
-    }else{
-      Object.keys(current).forEach(function(k){
-        if(current[k]&&typeof current[k]==="object")stack.push(current[k]);
-      });
-    }
+    else Object.keys(current).forEach(function(k){
+      if(current[k]&&typeof current[k]==="object")stack.push(current[k]);
+    });
   }
   return "";
 }
