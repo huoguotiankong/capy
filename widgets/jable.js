@@ -1,4 +1,4 @@
-/* CapyPlayer Jable.tv Widget v1.0.1
+/* CapyPlayer Jable.tv Widget v1.0.2
  * Official contract: https://capyplayer.feifeiduck.com/zh/dev/widget/widgetdev
  * No external server or credentials required; third-party availability is not guaranteed.
  */
@@ -26,9 +26,14 @@ var WidgetMetadata = {
   title: "Jable",
   description: "Jable 最近更新、热门、关键词搜索、标签筛选及视频 HLS 直链解析。仅限成年人；需可访问原站。",
   author: "MX / huoguotiankong",
-  version: "1.0.1",
+  version: "1.0.2",
   site: JB_SITE,
   modules: [
+    {
+      id: "jb_diagnostic", title: "网络诊断 · HTTP状态", type: "media_list",
+      functionName: "getJableDiagnostic", cacheDuration: 0,
+      timeoutSeconds: 30, retryCount: 0, params: []
+    },
     {
       id: "jb_latest", title: "最近更新", type: "media_list",
       functionName: "getJableLatest", cacheDuration: 600,
@@ -216,6 +221,50 @@ async function jbHTML(url) {
     throw new Error("Jable 页面触发了Cloudflare人机验证：独立组件请求无法完成浏览器验证");
   }
   return html;
+}
+
+function jbDiagnosticText(name, code, detail) {
+  var title = name + "：";
+  if (code === 200) title += "HTTP 200 可访问";
+  else if (code) title += "HTTP " + code;
+  else title += "连接失败 / 未知状态";
+  return {
+    id: "jable-diagnostic-" + name.replace(/\s+/g, "-"),
+    title: title,
+    mediaType: "movie",
+    description: detail
+  };
+}
+async function jbDiagnosticCheck(name, url) {
+  try {
+    var r = await Widget.http.get(url, {
+      headers: url.indexOf(JB_SITE) === 0 ? JB_HEADERS : { "Accept": "*/*" },
+      timeout: 12000
+    });
+    var code = Number(r && r.status) || (r && r.ok ? 200 : 0);
+    var detail = r && r.ok ? "HTTP请求成功；如列表仍为空，需继续检查HTML解析。" :
+      ((code === 403 || code === 429 || code === 503) ?
+       "独立HTTP请求遭到站点拒绝。浏览器与组件不共享Cookie/验证会话。" :
+       "请求返回非成功状态。请检查网络、DNS或URL。");
+    return jbDiagnosticText(name, code, detail);
+  } catch (err) {
+    var status = jbErrorStatus(err);
+    var message = (err && (err.message || err.toString && err.toString())) || "";
+    var detail = status === 403 || status === 429 || status === 503 ?
+      "站点可能限制脚本请求；请检查代理是否覆盖卡皮巴拉，无法仅靠更改User-Agent解决。" :
+      "请求异常：" + jbStr(message).slice(0, 140) + "。请检查卡皮巴拉网络/代理分应用设置。";
+    console.warn("Jable诊断", name, status || "unknown", jbStr(message).slice(0, 100));
+    return jbDiagnosticText(name, status, detail);
+  }
+}
+async function getJableDiagnostic() {
+  // Three independent probes allow distinguishing regional/APP network issues
+  // from an upstream HTTP anti-bot refusal without leaking cookies or tokens.
+  return await Promise.all([
+    jbDiagnosticCheck("Jable首页", JB_SITE + "/"),
+    jbDiagnosticCheck("Jable列表", JB_SITE + "/latest-updates/"),
+    jbDiagnosticCheck("GitHub组件源", "https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/jable.js")
+  ]);
 }
 async function jbList(path, params) {
   var url = jbPageURL(path, jbPage(params));
