@@ -2,12 +2,20 @@
 
 存放个人使用的 CapyPlayer（卡皮巴拉）JavaScript 组件。源码集中在 `widgets/`，后续更新保留稳定安装地址。
 
-## 红果短剧 · 官网目录（v0.1.0）
+## 红果短剧（v0.1.1）
 
 - 组件文件：`widgets/hongguo.js`
 - 固定安装地址：`https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/hongguo.js`
 - 官方组件文档：https://capyplayer.feifeiduck.com/zh/dev/widget/widgetdev
 - 依据：用户提供的《红果短剧(弹幕+显季版).py》中的官网数据接口与季集映射逻辑
+
+### v0.1.1 修复说明
+
+- 分类新增 SSR HTML 卡片解析；真人剧、漫剧、AI 剧新增首页同类别推荐兜底；漫画增加 Googlebot 请求尝试。
+- 详情新增 `/player/{series_id}` 与 HTML 元数据兜底，避免因缺失 `_ROUTER_DATA` 直接崩溃。若网页不提供完整季集，可能只能显示剧名、简介和总集数。
+- 新增 `WidgetMetadata.icon` 图标，组件名称缩短为「红果短剧」，保留组件 ID 和 Raw 安装地址。
+- 网络请求超时优化。完成模拟响应解析测试，**尚未进行真实手机端和实时源站验收**。
+- App 原生页面标题位置无法由组件脚本直接调整。
 
 ### 已实现
 
@@ -25,7 +33,7 @@
 
 ### 安装
 
-1. 在 GitHub 仓库 Settings → General → Danger Zone → Change repository visibility 将本仓库设为 **Public**。私有仓库无法匿名通过 Raw URL 安装。
+1. 确认仓库为 Public，GitHub Raw URL 能匿名访问。
 2. 打开卡皮巴拉 → 组件 → `+`。
 3. 粘贴上述固定安装地址，预览后添加。
 4. 先验证分类、搜索和详情。播放相关功能需要额外适配并在真机测试。
