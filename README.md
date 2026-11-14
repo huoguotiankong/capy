@@ -1,35 +1,35 @@
 # CapyPlayer 组件仓库
 
-存放个人使用的 CapyPlayer（卡皮巴拉）JavaScript 组件。源码集中在 `widgets/`，后续更新保留稳定安装地址。
+CapyPlayer 组件集中在 `widgets/`，可选播放辅助服务在 `server/`。
 
-## 红果短剧（v0.2.1）
+## 红果短剧 v0.3.0（局域网播放桥接测试版）
 
-**固定组件 URL：** `https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/hongguo.js`
+- 组件固定安装 URL：https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/hongguo.js
+- 组件源码：[widgets/hongguo.js](widgets/hongguo.js)
+- 桥接服务：[server/bridge.py](server/bridge.py)
+- Windows 使用说明：[server/README.md](server/README.md)
+- CapyPlayer 官方组件开发文档：https://capyplayer.feifeiduck.com/zh/dev/widget/widgetdev
 
-### v0.2.0–0.2.1 播放与跨季
+### 问题根因
 
-- 根据原 PY 源保留分类、搜索与 `series_id`；通过官网 `/detail?series_id={id}` 和 `/player/{id}` 的 SSR 数据识别 `seriesDetail.vid_list`、`accessible_episode_cnt` 和 `video_player_info.main_url`。
-- 实际播放资源：对官网开放且返回真实 CDN URL 的集数创建 CapyPlayer `seasons[].episodes[].videoUrl`，最多探测前 3 集。对于未开放集、无源集，不再输出空的播放项（不会假装全集能放）。
-- 换季：优先解析官网播放页相关季的 `/player/{series_id}` 链接，按季号排序并生成 `recommendations`；点击可进入其他季详情。关联列表缺失时回退官方搜索 API。
-- 官方宿主限制：完整的原生“季切换”列表依赖真实可播放季集数据；若没有每一季可播放链接，不能仅靠给出季号强行显示有效原生选集。当前可用的换季入口是详情页“推荐作品”。
-- 原 TVBox/PY 源的全剧播放依赖私有取流、签名、CENC 处理及 Range HTTP 服务；**该 JS 版本尚未移植这一后端**。如需完整播放，必须另有经过许可、可用的流媒体服务，不能直接把 PY 的本地 127.0.0.1 地址填入 CapyPlayer。
-- v0.2.1 加强媒体 URL 结构兼容、关联季标题解析与短时页面缓存，减少详情请求重复发送。
-- CDN 临时链接可能过期；需要重新打开详情页重新获取。原 PY 源的弹幕也未迁移。
+原 TVBox/FongMi Python 源使用签名取流、加密视频处理和 HTTP Range 本地服务器，纯 CapyPlayer JS 沙箱不能直接实现全部操作。v0.2.1 对官网公开直链的尝试在手机端仍无法稳定获取视频，因此 v0.3.0 添加**需要单独运行**的本地播放服务。
 
-**测试范围：** 静态语法检查与模拟官网响应单元测试通过；真实 Android 宿主、源站直链有效性和播放器内核仍需人工验证。
+### 配置方法
 
-### 安装与更新
+1. 下载本次对话中的 `capy_hongguo_bridge_v0.3.0.zip` 并解压，包含原 PY 源、桥接器和测试。
+2. Windows 10 / 11 按 [server/README.md](server/README.md) 安装依赖、启动服务，记录服务所在电脑的 LAN IP 和随机口令。
+3. 在组件全局参数填入 `hgBridgeUrl=http://192.168.1.10:8931`（换成实际 IP）与 `hgBridgeToken=<启动服务时输出的口令>`。
+4. 刷新组件列表以保存参数，再打开短剧详情。组件检测服务状态，预热前几集，并为可获取 `vid_list` 的剧集提供桥接播放线路。
 
-1. 在卡皮巴拉组件管理中粘贴以上固定 URL。
-2. 如果已经安装，先检查更新；没有更新入口时可以重新安装，再刷新缓存。
-3. 进入首页的“红果热播” → 任选剧集 → 检查资源是否有“第 1 集”，以及下方是否出现对应季的推荐卡片。
-4. 如仍显示“暂无可播放资源”，代表源站当次没有返回可用 CDN 直链；不代表可以伪造一个浏览页面 URL 来播放。
+### 当前限制
 
+- 需要电脑持续开机、同一局域网，尚未部署云服务。
+- 仅验证 Python 桥接协议中的 HTTP Range/206、HEAD、口令认证与健康检查；**真实红果取流和卡皮巴拉安卓播放仍待验证**。
+- 原生多季选集依赖真实的季集和可用播放资源；当前其他季可以通过详情页的相关推荐跳转。
+- 不要将服务端口直接开放到公网，不要把访问口令上传到公开 GitHub；仅用于合法授权内容。
 
-### 开发参考
+### 历史版本
 
-- 组件文件：`widgets/hongguo.js`
-- CapyPlayer 官方组件文档：https://capyplayer.feifeiduck.com/zh/dev/widget/widgetdev
-- 原始数据与算法参考：用户提供的《红果短剧(弹幕+显季版).py》。
-
-原 PY 源的完整取流依赖移动端请求签名、CENC 处理及支持 HTTP Range 的流服务。可选的 `HG_STREAM_BRIDGE` 仅为预留接口，目前没有公开或自动部署后端；其约定路径为 `/v1/hongguo/stream?vid=<id>&q=<quality>`。对于没有合法可用播放源的集数，组件不会虚构链接。
+- v0.1.1：修复分类/详情 HTML 解析与图标。
+- v0.2.1：公开集直链尝试、跨季推荐导航。
+- v0.3.0：桥接地址/口令设置、健康检查、播放会话预热和独立 Windows LAN 服务。
