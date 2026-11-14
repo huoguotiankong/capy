@@ -1,42 +1,55 @@
-# 红果短剧 API 播放实验（不影响 v0.4.0 稳定版）
+# 红果短剧授权播放 API：独立实验分支
 
-目的：研究在无需开启个人电脑的情况下，通过**已经取得使用授权的第三方媒体服务**为 CapyPlayer 提供短剧集数与按需播放地址。本实验不实现 DRM 解密或视频字节流转发。
+此目录供学习、测试与**经许可的第三方媒体服务**接入使用，**不代表已拥有提供红果内容的版权或播放授权**。稳定版 `widgets/hongguo.js` 保持 v0.4.0。
 
-## 当前结论（2026-11-14）
+## 已核对的外部条件
 
-- 小影 API 文档：https://www.xiaoyingapi.com/docs/drama/
+- 小影文档：https://www.xiaoyingapi.com/docs/drama/
 - 接入向导：https://www.xiaoyingapi.com/guide/
-- 文档包含 rank/categories/list/search/detail/play/stream 接口及字段说明，但文档在「开放·免签名」和「需项目签名」的标注上存在矛盾；正式接入按**需要签名**处理。
-- 官网要求由管理员开通项目，提供 APPID 和 APPSECRET；**尚未取得项目凭证，也尚未确认 API 授权范围、资费/调用额度及生产可用性**。
-- 当前无法证明该服务能够合法、稳定地提供全集资源；**不得把模拟测试当成真实播放验收**。
+- 文档标注有“开放·免签名”，但红果播放与总说明明确要求 HMAC-SHA256 项目签名；因此本实验按**必须取得项目凭证**设计。
+- 项目由管理员开通，提供 `APPID` 和 `APPSECRET`。调用费用、额度、内容与再分发授权均尚未核实；**不能宣称视频已经可播放、永久免费或获授权**。
+- 签名说明要求方法大写、实际请求路径、按 ASCII 键序组合的字段，路径尾斜杠必须一致。当前默认请求 `/api/dramas/hongguo/<operation>/`，若服务商确认生产路由无结尾斜杠，可设置 `XY_PATH_TRAILING_SLASH=false`。
 
-## 目录
+## 文件
 
-- `api/hongguo.js`：Vercel Node.js Serverless API。HMAC-SHA256 项目签名、访问口令、输入校验；播放模式只进行 302 跳转，不在 Vercel 上传、下载或转码 MP4。
-- `widgets/hongguo-api-beta.js`：单独的 CapyPlayer 测试组件（ID 为 `mx.hongguo.xiaoying.beta`），不覆盖现有 `widgets/hongguo.js`；复用官网分类和换季，只有服务端返回 `playable=true` 时才生成可点击的按需解析 URL。
-- `tests/api.test.js`：Node 单测。
+- `api/hongguo.js`：Vercel Node.js 函数。接收卡皮巴拉请求，按提供商规范签名调用。`detail` 返回每集候选画质所需的**临时、限定集号的签名票据**，`play` 使用票据取得上游临时地址并 302 跳转。
+- `widgets/hongguo-api-beta.js`：独立的 `mx.hongguo.xiaoying.beta` 组件，版本 v0.5.0-beta.2，不覆盖正式组件；保存个人配置，使用 `X-Capy-Access-Key` 请求头访问自己的后端，而不是在视频 URL 放长期访问口令。
+- `tests/api.test.js`：签名、请求校验、票据篡改与过期、未授权拒绝、详情票据、302、供应商异常模拟测试。
+- `.github/workflows/hongguo-api-check.yml`：GitHub Actions 自动运行 Node 语法检查与测试。
 
-## Vercel 试验部署说明（未部署）
+## 运行方式（目前未部署）
 
-1. **先确认接入方具有相关视频数据、播放地址的使用与分发授权，明确费用和调用配额。** 未确认前不要运行或启用直播流。
-2. Vercel 新建单独的测试项目，以本仓库 GitHub 为来源，把 **Root Directory 设置为 `experimental/xiaoying`**，Framework 为 Other，Node.js 20 或更高。
-3. 在 Vercel 项目的环境变量中设置 `XY_APP_ID`、`XY_APP_SECRET`、`CAPY_ACCESS_KEY`。前三者均不得写入 GitHub、公共 URL 或聊天内容；`CAPY_ACCESS_KEY` 自行生成高熵个人口令并只保存在该测试项目和手机组件配置里。
-4. 首先访问 `https://<your-vercel-host>/api/hongguo?op=status`；仅检查 JSON `ready:true`，这并不意味着供应商接口可以访问或视频能播放。
-5. 使用你自己的访问口令测试 `op=detail&series_id=<id>&access_key=<personal-token>`。不要公开带 token 的完整 URL。
-6. 完成 detail 的实际响应测试后，才配置 CapyPlayer Beta 组件 `hgApiBase=https://<your-vercel-host>` 和 `hgApiKey=<personal-token>`；刷新列表保存配置。
-7. 通过真实手机测试第 1 集、第 4 集、换季、画质、临时 URL 过期、播放器 302 跟随能力。通过前不要替换 v0.4.0。
+1. 先向服务商确认并获得 API 使用权限、媒体转发授权和可接受的计费额度。不能自行假定任何接口可匿名使用。
+2. 在 Vercel 新建**单独的测试项目**，GitHub 仓库选择 `huoguotiankong/capy`，Root Directory 选择 `experimental/xiaoying`，Framework 选 Other，Node.js 20+。
+3. 配置服务器环境变量（只在 Vercel 设置，不要上传 GitHub）：
+   - `XY_APP_ID`：服务商项目 ID
+   - `XY_APP_SECRET`：服务商项目签名密钥
+   - `CAPY_ACCESS_KEY`：自己生成的高熵、仅供 CapyPlayer 调用后端的访问口令
+   - `CAPY_TICKET_SECRET`：另一个独立的高熵密钥，用于签发播放票据
+   - `XY_PATH_TRAILING_SLASH`：可选，默认 true；经服务商确认后才设 false
+4. 访问 `/api/hongguo?op=status`：返回 `ready:true` 仅代表环境变量完整，并**不代表实片播放成功**。
+5. 从卡皮巴拉 Beta 组件的参数输入 `hgApiBase=https://你的域名`、`hgApiKey=你的CAPY_ACCESS_KEY`，刷新模块使配置保存到本机。
+6. 用实际短剧核对 API 搜索、详情、选集、第一集与第 4 集播放；验证播放器支持 HTTP 302、分片 MP4、HEVC，不可用时尝试 360P 兼容线路。
 
-## 风险与限制
+## 播放安全流程
 
-- 认证后端的客户端访问口令在视频 URL 查询参数中，可能被播放器或代理记录。仅适合个人实验，建议使用独立、可轮换的低权限口令；此口令**不能**和供应商的 APPSECRET 相同。请勿公开任何真实视频链接或口令。
-- 服务无分布式配额/限流机制；不能直接开放给多人使用，避免产生无法控制的调用费用。
-- `mode=file` 可能让首次播放返回 202 等待生成；第三方还可能返回 503、403。CapyPlayer 不一定自动重试这些状态。
-- Vercel 只负责取得真实有效的临时媒体 URL 并跳转，不保证第三方对 HEVC/MP4 Range 或设备 DRM 的兼容性。
-- 供应商如果不能证明内容授权和正式使用条款，应停止该实验，而不是通过 DRM 绕过来实现播放。
+1. 组件通过 HTTPS 自定义请求头 `X-Capy-Access-Key` 读取详情；长期客户端口令**不出现在 URL**。
+2. 后端只对 `episodes[].playable === true` 的集数签发播放票据，票据绑定剧 ID、集号、画质、编码、流模式与过期时间，4 小时后失效。
+3. 播放器打开 `https://你的域名/api/hongguo?op=play&ticket=...`，后端临时调用服务商 `play` 接口，并以 HTTP 302 跳转到上游返回的 HTTPS 视频地址；Vercel **不会转发/转码整段媒体**。
+4. 线路默认包括 1080P HEVC、720P HEVC 与 360P H264（是否支持取决于供应商）。默认使用 `pipe` 流，部分内核不支持跳转、流式视频或 HEVC，需在安卓真机验证。
 
-## 本地单元测试
+## 限制与注意事项
 
-安装 Node.js 20+，在当前目录运行：`npm test`。测试范围：签名串、输入验证、未授权拒绝、未配置拒绝、上游播放 302 重定向、错误状态；模拟数据不代表源站真实响应。
+- 票据是短期 Bearer URL，可以被转发使用至过期，并非真正的一次性密码；请勿分享。
+- 票据会过期，播放数小时后可能需要重新打开详情页以刷新；上游流首次加载、并发、配额与限流均未知。
+- Beta 没有跨实例的全局配额控制，不适合多人共享。避免意外流量和计费。
+- 文档中的官方路由有斜杠标注不一致风险、真实生产签名的正确性待有效凭证验证。
+- 不能自动完成项目开通、服务商授权确认、费用同意或真实端到端播放验证；在取得批准之前**不启动云部署**。
 
-稳定组件仍是：`https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/hongguo.js`。
-实验组件（仅用于授权测试）：`https://raw.githubusercontent.com/huoguotiankong/capy/main/experimental/xiaoying/widgets/hongguo-api-beta.js`。
+## 无凭证时执行测试
+
+Node.js 20+，运行 `cd experimental/xiaoying && npm test`。测试只使用模拟数据。
+
+**稳定组件 URL：** https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/hongguo.js
+
+**实验组件 URL：** https://raw.githubusercontent.com/huoguotiankong/capy/main/experimental/xiaoying/widgets/hongguo-api-beta.js
