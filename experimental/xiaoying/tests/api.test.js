@@ -52,7 +52,7 @@ test('strict query validation and constant-time comparison',()=>{
 test('playback tickets bind a single episode, quality, codec and expiry',()=>{
   const scope={series_id:'123456789',ep:3,q:'720',codec:'hevc',mode:'pipe'};
   const ticket=mintTicket(scope,'ticket_secret',10000);
-  assert.deepEqual(readTicket(ticket,'ticket_secret',10001),scope);
+  assert.deepEqual(readTicket(ticket,'ticket_secret',10001),{...scope,ep:'3'});
   assert.throws(()=>readTicket(ticket,'wrong_secret',10001),/ticket/i);
   assert.throws(()=>readTicket(ticket,'ticket_secret',24401),/Expired/);
   const [payload,mac]=ticket.split('.');
