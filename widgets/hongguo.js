@@ -56,9 +56,16 @@ var WidgetMetadata = {
   title: "红果短剧",
   description: "官网分类、搜索、跨季导航与官网已开放集直链；完整剧集播放需合法可用的流服务。",
   author: "MX / huoguotiankong",
-  version: "0.2.1",
+  version: "0.3.0",
   icon: "https://syimg.3dmgame.com/uploadimg/ico/2024/0524/1716534162709037.png",
   site: HG_SITE,
+  // User-configured only. Never store the bridge token in this public script.
+  globalParams: [
+    {name:"hgBridgeUrl",label:"播放桥接地址（局域网）",type:"string",
+     description:"例如 http://192.168.1.10:8931，需自己启动受信任的播放服务"},
+    {name:"hgBridgeToken",label:"桥接访问口令",type:"string",
+     description:"本地桥接服务启动时显示的 HG_BRIDGE_TOKEN，请勿上传到 GitHub"}
+  ],
   modules: [
     { id: "hg_hot", title: "红果热播", type: "media_list", functionName: "getHongguoHot", cacheDuration: 900, timeoutSeconds: 30, params: [{ name: "page", label: "页码", type: "page" }] },
     { id: "hg_real", title: "真人剧", type: "media_list", functionName: "getHongguoReal", cacheDuration: 900, timeoutSeconds: 30, params: hgCategoryParams("real-drama") },
@@ -243,6 +250,7 @@ async function hgPageData(url) {
 function hgLoader(obj, key) { return hgObject(hgObject(obj.loaderData)[key]); }
 async function hgCategory(route, params) {
   params=params||{};
+  hgBridgeConfig(params);
   var genre=hgString(params.genre),allowed=HG_CATEGORIES[route]||[];
   if(!allowed.some(function(g){return g[0]===genre;}))genre="";
   var page=hgPage(params);
@@ -281,6 +289,7 @@ async function hgCategory(route, params) {
   return [];
 }
 async function getHongguoHot(params) {
+  hgBridgeConfig(params);
   var page = hgPage(params);
   if (page > 1) return hgCategory("real-drama", { page: page });
   try {
@@ -313,6 +322,7 @@ async function hgSearchAPI(query, page) {
 }
 async function searchHongguo(params) {
   params = params || {};
+  hgBridgeConfig(params);
   var key = hgString(params.query || params.keyword);
   if (!key) return [];
   var page = hgPage(params);
@@ -582,6 +592,53 @@ async function hgOfficialOpenEpisodes(sid,sd,player) {
   return found;
 }
 
+
+function hgBridgeConfig(params) {
+  params=params||{};
+  try {
+    if(Object.prototype.hasOwnProperty.call(params,"hgBridgeUrl")) {
+      Widget.storage.set("mx.hongguo.streamBridge",hgString(params.hgBridgeUrl));
+    }
+    if(Object.prototype.hasOwnProperty.call(params,"hgBridgeToken")) {
+      Widget.storage.set("mx.hongguo.streamToken",hgString(params.hgBridgeToken));
+    }
+  }catch(e){console.warn("[红果] 播放配置存储不可用",String(e));}
+}
+function hgBridgeToken() {
+  try {return hgString(Widget.storage.get("mx.hongguo.streamToken",""));}
+  catch(_) {return "";}
+}
+async function hgBridgeAvailable(base) {
+  if(!base||!hgBridgeToken())return false;
+  // Local HTTP (LAN) or HTTPS: never send bridge secrets over a remote
+  // unencrypted public HTTP origin.
+  var hostname=/^http:\/\/([^/:]+)/i.exec(base),h=hostname?hostname[1]:"";
+  var isLAN=/^(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/i.test(h);
+  if(base.indexOf("http://")===0&&!isLAN) {
+    console.warn("[红果] 非局域网地址必须使用 HTTPS");
+    return false;
+  }
+  try {
+    var resp=await Widget.http.get(base+"/health",{timeout:3500});
+    var data=typeof resp.data==="string"?JSON.parse(resp.data):resp.data;
+    return !!(resp&&resp.ok&&hgObject(data).service==="capy-hongguo-bridge");
+  }catch(e){console.warn("[红果] 播放服务不可用",String(e));return false;}
+}
+async function hgBridgeWarm(bridge,vids) {
+  if(!bridge||!hgBridgeToken())return;
+  var seen={},selected=[];
+  hgArray(vids).slice(0,3).forEach(function(v){
+    var vid=hgString(v);
+    if(/^\d+$/.test(vid)&&!seen[vid]){selected.push(vid);seen[vid]=true;}
+  });
+  await Promise.all(selected.map(async function(vid){
+    try{
+      await Widget.http.get(bridge+"/v1/hongguo/warm?vid="+encodeURIComponent(vid)+
+        "&q=1080&token="+encodeURIComponent(hgBridgeToken()),{timeout:4000});
+    }catch(e){console.warn("[红果] 预热未完成",String(e));}
+  }));
+}
+
 function hgBridgeBase() {
   // Optional site-owner authorized streaming bridge; no default third-party relay.
   var base = hgString(HG_STREAM_BRIDGE);
@@ -592,7 +649,7 @@ function hgBridgeBase() {
   return /^https?:\/\//.test(base) ? base.replace(/\/+$/, "") : "";
 }
 function hgStreamUrl(bridge, vid, quality) {
-  return bridge + "/v1/hongguo/stream?vid=" + encodeURIComponent(vid) + "&q=" + encodeURIComponent(quality);
+  return bridge + "/v1/hongguo/stream?vid=" + encodeURIComponent(vid) + "&q=" + encodeURIComponent(quality) + "&token=" + encodeURIComponent(hgBridgeToken());
 }
 function hgEpisodes(group,index,bridge,multiSeason,official) {
   var ids=hgArray(group.sd.vid_list),count=Math.min(2500,Math.max(ids.length,Number(group.sd.episode_cnt)||0));
@@ -624,7 +681,19 @@ async function loadDetail(link) {
   var player=await hgPlayerSnapshot(sid);
   sd=hgMergeDetail(sd,player.detail,sid);
   if(!hgArray(sd.vid_list).length)sd.vid_list=hgVidListHTML(player.html);
-  var base=hgBaseName(sd.series_name),bridge=hgBridgeBase();
+  // If SSR has been degraded to HTML, preserve IDs from publicly
+  // visible episode links as an incremental fallback.
+  if(!hgArray(sd.vid_list).length) {
+    var known=hgObject(player.links),keys=Object.keys(known).map(Number).sort(function(a,b){return a-b;});
+    var consecutive=[],expected=1;
+    keys.forEach(function(n){if(n===expected && /^\d+$/.test(hgString(known[n]))) {
+      consecutive.push(hgString(known[n]));expected++;
+    }});
+    if(consecutive.length)sd.vid_list=consecutive;
+  }
+  var base=hgBaseName(sd.series_name),configuredBridge=hgBridgeBase();
+  var bridge=await hgBridgeAvailable(configuredBridge)?configuredBridge:"";
+  if(bridge)await hgBridgeWarm(bridge,sd.vid_list);
   var related=hgSeasonReferences(sd,player.html);
   if(!related.length && hgSeasonNumber(sd.series_name))related=await hgSeasonSearch(sd);
   var group={id:sid,sd:sd,number:hgSeasonNumber(sd.series_name)||1};
@@ -666,6 +735,7 @@ async function loadDetail(link) {
         " 集；其余剧集需官方应用或另外授权的流服务。":
         "[播放说明] 官网未提供可用直链；未授权剧集不生成假资源。");
   }
+  if(configuredBridge&&!bridge)description+="\n[桥接状态] 地址已配置但未检测到可用播放服务，请确认电脑运行中、同一局域网及口令正确。";
   if(related.length)description+="\n[换季] 下方「推荐作品」中可点击其他季进入该季详情。";
   return {
     id:"hg-"+sid,title:hgString(sd.series_name),type:"link",
