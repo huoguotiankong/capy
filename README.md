@@ -1,5 +1,20 @@
 # CapyPlayer 组件仓库
 
+## 腾讯视频片库 v1.1.0 — CapyPlayer Widget
+
+**固定安装 URL：** https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/qq.js
+
+**源码：** [widgets/qq.js](widgets/qq.js)
+
+在原 MakkaPakka 腾讯组件上升级，保留组件 ID `qq.video.pc.makka` 和原有六个分类：电视剧、电影、综艺、动漫、纪录片、少儿。增加腾讯视频图标（来自 [IconResource 图标库](https://github.com/luestr/IconResource)）；完善默认筛选、电影与综艺 2025/2026 年份选项、后台游标分页、海报字段回退、TMDB 匹配置信度、缓存失效时间、并发保序和错误日志。
+
+**使用说明：** 在 CapyPlayer 的组件管理页面添加上述 JS URL。组件返回的是已匹配的 **TMDB 媒体条目**，用于展示与进入 TMDB 详情，**不解析腾讯视频播放流**；TMDB 未找到可信匹配时该作品可能不显示。腾讯接口筛选值（包括最新年份）可能调整，实际可用性以 App 中的真实请求为准。
+
+**验证范围：** 已执行 JS 语法、模块、筛选、分页游标、海报回退、误匹配防护的模拟测试；尚未完成腾讯线上接口和 Android CapyPlayer 真机端到端验收。模拟回归测试可通过 `node --test tests/qq-widget.test.js` 执行。
+
+---
+
+
 此仓库集中维护卡皮巴拉 JavaScript 组件；可直接安装的脚本在 `widgets/`。
 
 ## 红果短剧 v0.4.0 — 无电脑纯组件版
