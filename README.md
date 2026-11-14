@@ -1,5 +1,20 @@
 # CapyPlayer 组件仓库
 
+## 优酷片库 v1.3.0 — CapyPlayer Widget
+
+**固定安装 URL：** https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/youku.js
+
+**源码：** [widgets/youku.js](widgets/youku.js)
+
+基于 MakkaPakka 优酷 v1.2.1 组件优化，保留 `youku.video.pc.makka` 及 6 个模块：电视剧、电影、综艺、动漫、纪录片、少儿。添加 [IconResource](https://github.com/luestr/IconResource) 的优酷视频图标、全部频道 2025/2026 年筛选、Worker URL 校验和请求重试、6 小时的已成功片库缓存、Worker 可选的原始海报回退、TMDB 匹配防误判及并发保序。
+
+**特别注意：本组件仍依赖独立的 `youku-worker` 中转服务。** 未填写「API 地址」会尝试原附件中的 `https://youku.518518.qzz.io`，但截至本次提交，尚未验证此域名的可访问性及返回数据真实性。安装成功不代表 Worker 可用。若分类空白，应查看 App 日志并在组件参数「API 地址」填写实际可用的 Worker 地址（需提供与原版一致的 `?category=...&page=...&area=...&year=...` 接口和 JSON `items` 列表）。可检查返回的作品名与筛选条件是否吻合。
+
+此组件只输出可信匹配的 **TMDB 详情条目**，不是优酷播放流解析器；无可靠 TMDB 匹配的作品可能被省略。已通过 JS 语法检查和 12 项模拟数据用例，**未完成真实 Worker/优酷接口及 CapyPlayer 安卓端端到端验收**。回归测试：`node --test tests/youku-widget.test.js`。
+
+---
+
+
 ## 爱奇艺片库 v1.1.0 — CapyPlayer Widget
 
 **固定安装 URL：** https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/iqiyi.js
