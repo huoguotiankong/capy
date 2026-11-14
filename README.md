@@ -42,3 +42,14 @@
 - [kaixinguo-android](https://github.com/kadaliao/kaixinguo-android)：手机端原生媒体处理架构参考。
 
 仅用于学习与个人使用；请尊重视频版权与平台访问规则。
+
+## 进行中的播放实验（尚未上线）
+
+为解决 v0.4.0「暂无可播放资源」，新增了**不覆盖稳定组件**的第三方供应商 API 试验分支：
+
+- [实验项目说明](experimental/xiaoying/README.md)
+- [独立 Beta Widget](experimental/xiaoying/widgets/hongguo-api-beta.js)，组件 ID `mx.hongguo.xiaoying.beta`
+- [Vercel 签名/播放跳转 API](experimental/xiaoying/api/hongguo.js)，只生成临时媒体 URL 跳转，不代理视频流。
+
+**现状：**接口适配与模拟测试通过，仍未取得服务商 APPID/APPSECRET、调用价格和版权/播放授权确认，尚未部署上线，也没有真机实片播放成功。不要以 Beta 脚本替换稳定版。
+
