@@ -51,5 +51,6 @@
 - [独立 Beta Widget](experimental/xiaoying/widgets/hongguo-api-beta.js)，组件 ID `mx.hongguo.xiaoying.beta`
 - [Vercel 签名/播放跳转 API](experimental/xiaoying/api/hongguo.js)，只生成临时媒体 URL 跳转，不代理视频流。
 
-**当前实验版本：v0.5.0-beta.2。** 已改为请求头身份认证 + 每集 4 小时限定票据，长期口令不再写入播放器 URL。已补充 Node 模拟测试与 GitHub Actions 检查工作流。**仍未取得供应商项目凭证，尚未确认费用与版权/播放授权，也未部署或在 Android 上验证实片播放。** 不要以 Beta 脚本替换稳定版。
+**当前实验版本：v0.5.0-beta.3。** 已改为请求头身份认证 + 每集 4 小时限定票据，长期口令不再写入播放器 URL。已补充 Node 模拟测试与 GitHub Actions 检查工作流。**仍未取得供应商项目凭证，尚未确认费用与版权/播放授权，也未部署或在 Android 上验证实片播放。** 不要以 Beta 脚本替换稳定版。
 
+**实验部署：** 已创建独立 Vercel 项目 `capy-hongguo-lab`，部署构建状态 READY；尚未配置供应商项目凭证，Vercel 部署认证保护仍开启，不能视为卡皮巴拉可直接使用的播放接口。已补充 HEAD 支持和受认证的 `diagnose` 诊断入口，详情见实验说明。
