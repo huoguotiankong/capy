@@ -1,0 +1,32 @@
+name: Hongguo API Experiment Checks
+
+on:
+  push:
+    paths:
+      - 'experimental/xiaoying/**'
+      - '.github/workflows/hongguo-api-check.yml'
+  pull_request:
+    paths:
+      - 'experimental/xiaoying/**'
+      - '.github/workflows/hongguo-api-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  node-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify Node.js
+        run: node --version
+      - name: Syntax check (backend and widget)
+        run: |
+          node --check experimental/xiaoying/api/hongguo.js
+          node --check experimental/xiaoying/widgets/hongguo-api-beta.js
+      - name: Run focused mock tests
+        run: node --test experimental/xiaoying/tests/api.test.js
