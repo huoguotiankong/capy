@@ -144,16 +144,18 @@ async function handler(req,res) {
   res.setHeader('Cache-Control','private, no-store, max-age=0');
   res.setHeader('Referrer-Policy','no-referrer');
   res.setHeader('X-Content-Type-Options','nosniff');
-  if(req.method!=='GET'){
-    res.setHeader('Allow','GET');
-    return fail(res,405,'Method not allowed');
-  }
   const query=new URL(req.url||'/', 'https://localhost').searchParams;
   const op=query.get('op');
+  // Media engines may issue HEAD before GET. Only allow HEAD for a valid
+  // playback ticket, never for metadata or diagnostics.
+  if(req.method!=='GET' && !(req.method==='HEAD' && op==='play')){
+    res.setHeader('Allow',op==='play'?'GET, HEAD':'GET');
+    return fail(res,405,'Method not allowed');
+  }
   if(op==='status'){
     res.setHeader('Content-Type','application/json; charset=utf-8');
     return res.end(JSON.stringify({service:'capy-xiaoying-adapter',
-      ready:requireEnv(),version:'0.2.0'}));
+      ready:requireEnv(),version:'0.2.1'}));
   }
   if(!requireEnv())return fail(res,503,'Provider not configured');
   let biz;
@@ -163,16 +165,31 @@ async function handler(req,res) {
   }else{
     if(!safeEqual(req.headers && req.headers['x-capy-access-key'],
       process.env.CAPY_ACCESS_KEY))return fail(res,401,'Unauthorized');
-    try{biz=paramsFor(op,query);}catch(e){return fail(res,400,e.message);}
+    try{biz=paramsFor(op==='diagnose'?'detail':op,query);}
+    catch(e){return fail(res,400,e.message);}
   }
   let data;
-  try{data=await providerGet(op,biz);}
+  try{data=await providerGet(op==='diagnose'?'detail':op,biz);}
   catch(e){return fail(res,502,String(e.message).slice(0,100));}
   if(op==='play'){
     if(!videoUrlOK(data.url))return fail(res,502,'Provider returned unsafe media URL');
     res.statusCode=302;
     res.setHeader('Location',data.url);
     return res.end();
+  }
+  if(op==='diagnose'){
+    const episodes=Array.isArray(data.episodes)?data.episodes:[];
+    res.statusCode=200;
+    res.setHeader('Content-Type','application/json; charset=utf-8');
+    return res.end(JSON.stringify({
+      service:'capy-xiaoying-adapter',providerReachable:true,
+      seriesId:String(data.series_id||biz.series_id),
+      episodeCount:episodes.length,
+      playableCount:episodes.filter(x=>x && x.playable===true).length,
+      originCount:episodes.filter(x=>x && x.playable===true && x.source==='origin').length,
+      streamCount:episodes.filter(x=>x && x.playable===true && x.source==='stream').length,
+      mediaPlaybackVerified:false
+    }));
   }
   if(op==='detail')data=augmentDetail(data,process.env.CAPY_TICKET_SECRET);
   res.setHeader('Content-Type','application/json; charset=utf-8');
