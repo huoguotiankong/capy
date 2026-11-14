@@ -23,8 +23,8 @@ function resp(){
     setHeader(k,v){this.headers[String(k).toLowerCase()]=v;},
     end(b){this.body=b===undefined?'':String(b);return this;}};
 }
-async function req(url,header){
-  const r=resp();await server({method:'GET',url,headers:header||{}},r);return r;
+async function req(url,header,method='GET'){
+  const r=resp();await server({method,url,headers:header||{}},r);return r;
 }
 test('canonical signature includes trailing slash and exact sorted fields',()=>{
   setEnv();
@@ -151,4 +151,55 @@ test('provider failure and unsafe redirect are rejected',async()=>{
     assert.equal(r.statusCode,502);
     assert.equal(r.headers.location,undefined);
   }finally{global.fetch=oldFetch;}
+});
+
+
+test('Android HEAD playback preflight redirects with valid ticket',async()=>{
+  setEnv();const oldFetch=global.fetch;let requested;
+  global.fetch=async url=>{
+    requested=new URL(url);
+    return {ok:true,json:async()=>({code:10000,data:{
+      playable:true,url:'https://media.example.test/clip.mp4?valid=1'}})};
+  };
+  try {
+    const ticket=mintTicket({series_id:'123456789',ep:1,q:'360',codec:'h264',mode:'pipe'},
+      'ticket_secret_456');
+    const r=await req('/api/hongguo?op=play&ticket='+encodeURIComponent(ticket),{},'HEAD');
+    assert.equal(r.statusCode,302);
+    assert.equal(r.headers.location,'https://media.example.test/clip.mp4?valid=1');
+    assert.equal(r.body,'');
+    assert.equal(requested.searchParams.get('ep'),'1');
+    const bad=await req('/api/hongguo?op=detail&series_id=123456789',
+      {'x-capy-access-key':'client_secret_123'},'HEAD');
+    assert.equal(bad.statusCode,405);
+  } finally {global.fetch=oldFetch;}
+});
+test('authenticated provider diagnose checks metadata without serving video',async()=>{
+  setEnv();const oldFetch=global.fetch;let called;
+  global.fetch=async url=>{
+    called=new URL(url);
+    return {ok:true,json:async()=>({code:10000,data:{
+      series_id:'123456789',episode_cnt:4,episodes:[
+        {ep:1,playable:true,source:'origin'},
+        {ep:2,playable:true,source:'origin'},
+        {ep:3,playable:false},
+        {ep:4,playable:true,source:'stream'}
+      ]}})};
+  };
+  try {
+    const base='/api/hongguo?op=diagnose&series_id=123456789';
+    let r=await req(base);
+    assert.equal(r.statusCode,401);
+    r=await req(base,{'x-capy-access-key':'client_secret_123'});
+    assert.equal(r.statusCode,200);
+    const data=JSON.parse(r.body);
+    assert.equal(data.providerReachable,true);
+    assert.equal(data.episodeCount,4);
+    assert.equal(data.playableCount,3);
+    assert.equal(data.originCount,2);
+    assert.equal(data.streamCount,1);
+    assert.equal(data.mediaPlaybackVerified,false);
+    assert.equal(called.pathname,'/api/dramas/hongguo/detail/');
+    assert.ok(!r.body.includes('ticket_secret_456'));
+  } finally {global.fetch=oldFetch;}
 });
