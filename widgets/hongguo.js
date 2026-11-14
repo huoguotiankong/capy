@@ -53,10 +53,11 @@ function hgCategoryParams(route) {
 }
 var WidgetMetadata = {
   id: "mx.hongguo",
-  title: "红果短剧 · 官网目录",
+  title: "红果短剧",
   description: "官网热播、真人剧、漫剧、AI剧、漫画、搜索与季集信息；完整播放需要独立的授权流服务。",
   author: "MX / huoguotiankong",
-  version: "0.1.0",
+  version: "0.1.1",
+  icon: "https://syimg.3dmgame.com/uploadimg/ico/2024/0524/1716534162709037.png",
   site: HG_SITE,
   modules: [
     { id: "hg_hot", title: "红果热播", type: "media_list", functionName: "getHongguoHot", cacheDuration: 900, timeoutSeconds: 30, params: [{ name: "page", label: "页码", type: "page" }] },
@@ -132,6 +133,97 @@ function hgRouter(html) {
   if (!match) throw new Error("红果页面未包含 _ROUTER_DATA，可能触发风控或页面升级");
   return hgBalancedJSON(text, match.index + match[0].length);
 }
+
+function hgDecode(text) {
+  return String(text || "").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'")
+    .replace(/&lt;/g,"<").replace(/&gt;/g,">");
+}
+function hgText(html) {
+  return hgDecode(String(html||"").replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ")
+    .replace(/<\/(?:div|p|h\d|span)>/gi,"\n").replace(/<[^>]+>/g," ")
+    .replace(/[ \t]+/g," ").trim());
+}
+function hgAttr(tag, attr) {
+  var patt=new RegExp("\\b"+attr+"\\s*=\\s*([\"'])(.*?)\\1","i"),m=patt.exec(tag);
+  return m?hgDecode(m[2]):"";
+}
+function hgCardsHTML(html) {
+  if(typeof html!=="string" || html.indexOf("series_id=")<0) return [];
+  var links=[],docId=null;
+  if(Widget.dom && Widget.dom.parse && Widget.dom.select) try {
+    docId=Widget.dom.parse(html);
+    var nodes=Widget.dom.select(docId,'a[href*="series_id="]');
+    hgArray(nodes).forEach(function(n) {
+      var href=Widget.dom.attr?Widget.dom.attr(n,"href"):"";
+      links.push({href:href||hgObject(n.attributes).href,body:n.outerHtml||n.html||n.text||""});
+    });
+  }catch(e){console.warn("[红果] DOM 提取失败",String(e));}
+  finally{if(docId && Widget.dom.remove)try{Widget.dom.remove(docId);}catch(_){}}
+  var rex=/<a\b[^>]*href\s*=\s*(["'])([^"']*series_id=[^"']*)\1[^>]*>([\s\S]*?)<\/a>/gi,m;
+  while((m=rex.exec(html))!==null)links.push({href:m[2],body:m[3]});
+  var rows=[],seen={};
+  links.forEach(function(link) {
+    var id=/[?&]series_id=(\d+)/.exec(hgDecode(link.href||""));
+    if(!id || seen[id[1]]) return;
+    var inner=link.body||"",img=/<img\b[^>]*>/i.exec(inner), imgTag=img?img[0]:"";
+    var cover=hgAttr(imgTag,"src")||hgAttr(imgTag,"data-src");
+    if(/^data:/.test(cover))cover=hgAttr(imgTag,"data-src");
+    if(cover.indexOf("//")===0)cover="https:"+cover;
+    else if(cover.charAt(0)==="/")cover=HG_SITE+cover;
+    var title="",titleTag=/<(?:h2|h3|h4|span|div)[^>]*class\s*=\s*["'][^"']*(?:title|name)[^"']*["'][^>]*>([\s\S]*?)<\/(?:h2|h3|h4|span|div)>/i.exec(inner);
+    if(titleTag)title=hgText(titleTag[1]).trim();
+    if(!title)title=hgAttr(imgTag,"alt");
+    var t=hgText(inner);
+    if(!title) {
+      var lines=t.split(/\n+/);
+      for(var i=0;i<lines.length;i++){
+        var x=lines[i].trim().replace(/^(?:全|更新至)\s*\d+\s*集\s*/,"");
+        if(x.length>1 && x.length<100){title=x;break;}
+      }
+    }
+    if(!title)return;
+    var count=/(?:全|更新至)\s*(\d+)\s*集/.exec(t);
+    seen[id[1]]=true;
+    rows.push({series_id:id[1],series_name:title,series_cover:cover,episode_cnt:count?Number(count[1]):0});
+  });
+  return hgMediaList(rows);
+}
+function hgDetailHTML(html,sid) {
+  if(typeof html!=="string")return null;
+  var m=/<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
+  var title=m?hgText(m[1]).trim():"";
+  if(!title)return null;
+  var meta=/<meta\b[^>]*name=["']description["'][^>]*>/i.exec(html);
+  var desc=meta?hgAttr(meta[0],"content"):"";
+  var image=/<meta\b[^>]*property=["']og:image["'][^>]*>/i.exec(html);
+  var cover=image?hgAttr(image[0],"content"):"";
+  var count=/(?:全|更新至)\s*(\d+)\s*集/.exec(hgText(html));
+  return {series_id:sid,series_name:title,series_intro:desc,series_cover:cover,
+    episode_cnt:count?Number(count[1]):0,vid_list:[]};
+}
+async function hgPageResponse(url, bot) {
+  var hdr=Object.assign({},HG_HEADERS);
+  if(bot)hdr["User-Agent"]="Googlebot";
+  var data=await hgGet(url,hdr);
+  if(data && typeof data==="object" && data.loaderData)return {router:data,html:""};
+  if(data && typeof data==="object" && typeof data.html==="string")data=data.html;
+  var html=typeof data==="string"?data:"";
+  var router=null;
+  try{router=hgRouter(data);}catch(_){}
+  return {router:router,html:html};
+}
+async function hgHomeCategory(route) {
+  var p=await hgPageResponse(HG_SITE+"/",false);
+  var all=hgArray(hgLoader(p.router,"page").homeSections);
+  var types={"real-drama":"human","comic-drama":"comic","ai-drama":"ai"};
+  var rows=[];
+  all.forEach(function(section) {
+    if(hgString(hgObject(section).tab_type)===types[route])rows=rows.concat(hgArray(section.video_list));
+  });
+  return hgMediaList(rows);
+}
+
 async function hgGet(url, headers) {
   var response = await Widget.http.get(url, { headers: headers || HG_HEADERS, timeout: 25000 });
   if (!response || !response.ok) throw new Error("HTTP " + (response ? response.status : "no response") + " " + url);
@@ -143,21 +235,31 @@ async function hgPageData(url) {
 }
 function hgLoader(obj, key) { return hgObject(hgObject(obj.loaderData)[key]); }
 async function hgCategory(route, params) {
-  params = params || {};
-  var genre = hgString(params.genre);
-  var allowed = HG_CATEGORIES[route] || [];
-  if (!allowed.some(function (g) { return g[0] === genre; })) genre = "";
-  var page = hgPage(params);
-  var url = HG_SITE + "/category/" + route + (genre ? "/" + encodeURIComponent(genre) : "") + "?page=" + page;
-  try {
-    var data = await hgPageData(url);
-    var loader = hgLoader(data, "category_$");
-    if (!Object.keys(loader).length) loader = hgLoader(data, "category_page");
-    return hgMediaList(loader.recommendList);
-  } catch (e) {
-    console.error("[红果] 分类失败", route, genre, page, String(e));
-    throw e;
+  params=params||{};
+  var genre=hgString(params.genre),allowed=HG_CATEGORIES[route]||[];
+  if(!allowed.some(function(g){return g[0]===genre;}))genre="";
+  var page=hgPage(params);
+  var base=HG_SITE+"/category/"+route+(genre?"/"+encodeURIComponent(genre):"");
+  var urls=page===1?[base,base+"?page=1"]:[base+"?page="+page],errors=[];
+  for(var i=0;i<urls.length;i++){
+    try {
+      var res=await hgPageResponse(urls[i],false);
+      if(res.router){
+        var ld=hgLoader(res.router,"category_$");
+        if(!Object.keys(ld).length)ld=hgLoader(res.router,"category_page");
+        var mapped=hgMediaList(ld.recommendList);
+        if(mapped.length)return mapped;
+      }
+      var fromHTML=hgCardsHTML(res.html);
+      if(fromHTML.length){console.warn("[红果] 分类 HTML 兜底",route,fromHTML.length);return fromHTML;}
+    }catch(e){errors.push(String(e));}
   }
+  if(page===1 && !genre)try {
+    var home=await hgHomeCategory(route);
+    if(home.length){console.warn("[红果] 分类首页板块兜底",route,home.length);return home;}
+  }catch(e){errors.push(String(e));}
+  console.warn("[红果] 分类无有效结果",route,page,errors.join(" | "));
+  return [];
 }
 async function getHongguoHot(params) {
   var page = hgPage(params);
@@ -232,10 +334,28 @@ function hgSeriesId(link) {
   return /^(hg-|hg-series-v1:)?\d+$/.test(val) ? val.replace(/^(hg-|hg-series-v1:)/, "") : "";
 }
 async function hgSeriesDetail(sid) {
-  var obj = await hgPageData(HG_SITE + "/detail?series_id=" + encodeURIComponent(sid));
-  var sd = hgObject(hgLoader(obj, "detail_page").seriesDetail);
-  if (!Object.keys(sd).length) throw new Error("红果详情数据为空: " + sid);
-  return sd;
+  var urls=[HG_SITE+"/detail?series_id="+encodeURIComponent(sid),HG_SITE+"/player/"+encodeURIComponent(sid)];
+  var error="";
+  for(var i=0;i<urls.length;i++){
+    try{
+      var p=await hgPageResponse(urls[i],false);
+      if(p.router){
+        var sd=hgObject(hgLoader(p.router,"detail_page").seriesDetail);
+        if(!Object.keys(sd).length)sd=hgObject(hgLoader(p.router,"player_page").seriesDetail);
+        if(Object.keys(sd).length)return sd;
+      }
+      var fromHTML=hgDetailHTML(p.html,sid);
+      if(fromHTML){console.warn("[红果] 详情 HTML 兜底",sid);return fromHTML;}
+    }catch(e){error=String(e);}
+  }
+  try{
+    var bot=await hgPageResponse(urls[0],true);
+    var bs=hgObject(hgLoader(bot.router,"detail_page").seriesDetail);
+    if(Object.keys(bs).length)return bs;
+    var bf=hgDetailHTML(bot.html,sid);
+    if(bf)return bf;
+  }catch(e){error=String(e);}
+  throw new Error("红果详情数据不可用: "+sid+" "+error);
 }
 async function hgSeasons(sd) {
   var sid = hgString(sd.series_id);
@@ -309,7 +429,7 @@ async function loadDetail(link) {
   var sid = hgSeriesId(link);
   if (!sid || !/^\d+$/.test(sid)) throw new Error("无效的红果 series_id: " + hgString(link));
   var sd = await hgSeriesDetail(sid);
-  var groups = await hgSeasons(sd);
+  var groups = hgArray(sd.vid_list).length ? await hgSeasons(sd) : [];
   var bridge = hgBridgeBase();
   var seasons = groups.map(function (group, i) {
     var eps = hgEpisodes(group, i, bridge, groups.length > 1);
@@ -333,7 +453,7 @@ async function loadDetail(link) {
     mediaType: "tv",
     posterUrl: hgString(sd.series_cover),
     description: description,
-    episodeCount: seasons.reduce(function (n, group) { return n + group.episodeCount; }, 0),
+    episodeCount: seasons.length ? seasons.reduce(function (n, group) { return n + group.episodeCount; }, 0) : Number(sd.episode_cnt || 0),
     seasonCount: seasons.length,
     currentSeason: hgSeasonNumber(sd.series_name) || 1,
     currentEpisode: 1,
