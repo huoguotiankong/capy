@@ -12,6 +12,7 @@ import json
 import os
 import secrets
 import sys
+import threading
 from http.server import ThreadingHTTPServer
 from urllib.parse import parse_qs, urlencode, urlparse
 
@@ -44,7 +45,7 @@ def build_handler(source, token: str, did: str, iid: str):
                     self.wfile.write(data)
                 return
 
-            if parsed.path != "/v1/hongguo/stream":
+            if parsed.path not in ("/v1/hongguo/stream", "/v1/hongguo/warm"):
                 self._fail(404, b"not found")
                 return
 
@@ -58,6 +59,18 @@ def build_handler(source, token: str, did: str, iid: str):
             quality = (query.get("q") or ["1080"])[0]
             if not vid.isdigit() or quality not in {"360", "480", "540", "720", "1080"}:
                 self._fail(400, b"invalid vid or quality")
+                return
+
+            if parsed.path == "/v1/hongguo/warm":
+                def warm():
+                    try:
+                        source._stream_session(vid, {"device_id": did, "install_id": iid}, quality)
+                    except Exception:
+                        pass
+                threading.Thread(target=warm, daemon=True).start()
+                self.send_response(202)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
                 return
 
             # All stream processing stays within the original Python source.
