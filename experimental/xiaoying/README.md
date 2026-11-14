@@ -13,7 +13,7 @@
 ## 文件
 
 - `api/hongguo.js`：Vercel Node.js 函数。接收卡皮巴拉请求，按提供商规范签名调用。`detail` 返回每集候选画质所需的**临时、限定集号的签名票据**，`play` 使用票据取得上游临时地址并 302 跳转。
-- `widgets/hongguo-api-beta.js`：独立的 `mx.hongguo.xiaoying.beta` 组件，版本 v0.5.0-beta.2，不覆盖正式组件；保存个人配置，使用 `X-Capy-Access-Key` 请求头访问自己的后端，而不是在视频 URL 放长期访问口令。
+- `widgets/hongguo-api-beta.js`：独立的 `mx.hongguo.xiaoying.beta` 组件，版本 v0.5.0-beta.3，不覆盖正式组件；保存个人配置，使用 `X-Capy-Access-Key` 请求头访问自己的后端，而不是在视频 URL 放长期访问口令。
 - `tests/api.test.js`：签名、请求校验、票据篡改与过期、未授权拒绝、详情票据、302、供应商异常模拟测试。
 - `.github/workflows/hongguo-api-check.yml`：GitHub Actions 自动运行 Node 语法检查与测试。
 
@@ -53,3 +53,29 @@ Node.js 20+，运行 `cd experimental/xiaoying && npm test`。测试只使用模
 **稳定组件 URL：** https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/hongguo.js
 
 **实验组件 URL：** https://raw.githubusercontent.com/huoguotiankong/capy/main/experimental/xiaoying/widgets/hongguo-api-beta.js
+
+## 部署核验：Vercel 独立测试项目
+
+- 项目：`capy-hongguo-lab`（与现有弹幕项目隔离）
+- 构建状态：`READY`，部署文件来自 `experimental/xiaoying/api/hongguo.js`
+- 部署地址：https://capy-hongguo-lab.vercel.app
+- 诊断接口：`/api/hongguo?op=status`（仅返回配置是否齐全，不能证明实际播放）
+- 根据 Vercel 项目配置，该部署启用了认证保护；未带 Vercel 身份的浏览器/播放器可能无法直接访问。因此不能将该 URL 直接当成已可供卡皮巴拉安装使用的公开后端。
+- 当前没有配置供应商凭证；即使去掉 Vercel 部署保护，`status.ready` 也应为 `false`，且业务 API 会拒绝调用。
+- **本次部署只完成构建验证**；未访问到真实授权视频接口、未绕过部署保护，也未对任何红果视频进行播放。
+
+### 后续测试顺序
+
+1. 先核对服务商项目是否能开通红果授权服务，并确认调用条件与内容播放权利。
+2. 在 Vercel Environment Variables 中配置 `XY_APP_ID`、`XY_APP_SECRET`、`CAPY_ACCESS_KEY`、`CAPY_TICKET_SECRET`，不要发送给聊天、不要提交到 GitHub。
+3. 先使用项目登录态测试 `op=status` 和带 `X-Capy-Access-Key` 请求头的 `op=diagnose&series_id=<合法剧集ID>`，可得到上游剧集数和 `playableCount`，但不会触发播放，也不会返回密钥。
+4. 完成身份/权限/授权验证后，再单独决定让卡皮巴拉访问服务的网络方案；不要直接关掉整个账号的部署保护。
+5. 做真机播放与 302 跳转验证，再讨论提升到正式组件。
+
+### v0.5.0-beta.3 的修复
+
+- 后端支持 `HEAD` 播放预检，防止 Android 播放器先执行 HEAD 时直接收到 405。
+- 后端增加需要访问口令的 `op=diagnose` 元数据核查接口；不提供媒体 URL 或供应商密钥。
+- 组件修复了空白默认参数覆盖已保存服务配置的问题。
+- 新增 HEAD 与诊断单元测试，总计 11 个测试用例（代码已提交，CI 结果仍需确认）。
+
