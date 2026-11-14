@@ -46,7 +46,7 @@ var WidgetMetadata = {
   title: "红果短剧 · API试验版",
   description: "独立测试入口；在已获授权的服务账号与 Vercel 签名后端就绪时尝试临时播放地址。",
   author: "MX / huoguotiankong",
-  version: "0.5.0-beta.1",
+  version: "0.5.0-beta.2",
   icon: "https://syimg.3dmgame.com/uploadimg/ico/2024/0524/1716534162709037.png",
   site: HG_SITE,
   globalParams:[
@@ -702,7 +702,7 @@ function hgApiConfig() {
   } catch(e){return null;}
 }
 function hgApiURL(config,op,params) {
-  var parts=["op="+encodeURIComponent(op),"access_key="+encodeURIComponent(config.key)];
+  var parts=["op="+encodeURIComponent(op)];
   Object.keys(params||{}).forEach(function(k){
     var v=params[k];if(v!==undefined && v!==null && v!=="")parts.push(encodeURIComponent(k)+"="+encodeURIComponent(String(v)));
   });
@@ -711,7 +711,8 @@ function hgApiURL(config,op,params) {
 async function hgApiGet(op,params) {
   var config=hgApiConfig();
   if(!config)throw new Error("尚未配置授权服务地址和个人访问口令");
-  var r=await Widget.http.get(hgApiURL(config,op,params),{timeout:10000});
+  var r=await Widget.http.get(hgApiURL(config,op,params),{timeout:10000,
+    headers:{"X-Capy-Access-Key":config.key,"Accept":"application/json"}});
   if(!r||!r.ok)throw new Error("后端 HTTP "+(r&&r.status));
   var d=typeof r.data==="string"?JSON.parse(r.data):r.data;
   if(!d||d.code!==10000||!d.data)throw new Error("后端 API 未返回有效数据");
@@ -739,15 +740,19 @@ async function hgApiSearch(params) {
   }catch(e){console.warn("[API测试] 搜索不可用",String(e));return [];}
 }
 function hgApiEpisodes(seriesId,detail,config,season) {
-  return hgArray(detail.episodes).filter(function(x){
+  return hgArray(detail.episodes).filter(function(x) {
     return x && x.playable===true && Number(x.ep)>0 && Number(x.ep)<=9999;
   }).map(function(ep){
-    var n=Number(ep.ep),uri=hgApiURL(config,"play",{
-      series_id:seriesId,ep:n,q:720,codec:"hevc",mode:"file"
-    });
+    var n=Number(ep.ep),sources=hgArray(ep.play_sources).map(function(line,index){
+      var ticket=hgString(line.ticket);
+      if(!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(ticket))return null;
+      return {id:hgString(line.id)||("line-"+index),title:hgString(line.title)||"高清",
+        videoUrl:hgApiURL(config,"play",{ticket:ticket}),isDefault:index===0};
+    }).filter(Boolean);
+    if(!sources.length)return null;
     return {id:"hg-api-ep-"+seriesId+"-"+n,episodeNumber:n,seasonNumber:season,
-      title:"第"+n+"集",videoUrl:uri};
-  });
+      title:"第"+n+"集",playSources:sources,videoUrl:sources[0].videoUrl};
+  }).filter(Boolean);
 }
 async function loadDetail(link) {
   var sid=hgSeriesId(link);
