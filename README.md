@@ -1,5 +1,20 @@
 # CapyPlayer 组件仓库
 
+## 芒果TV片库 v1.1.0 — CapyPlayer Widget
+
+**固定安装 URL：** https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/mgtv.js
+
+**源码：** [widgets/mgtv.js](widgets/mgtv.js)
+
+在 MakkaPakka 芒果TV v1.0.2 上升级，保留组件 ID `mgtv.video.pc.makka` 和六大模块（电视剧、电影、综艺、动漫、纪录片、少儿）。使用芒果TV官方片库接口 `pianku.api.mgtv.com/rider/list/pcweb/v3`，**不依赖额外 Worker**。添加 [IconResource](https://github.com/luestr/IconResource) 的芒果TV PNG 图标；为电视剧/电影补充 2025 与 2026 年筛选；按原频道独立的类型、地区、年份、状态、资费、版本、年龄段等参数组合筛选；优化请求重试、列表分页、官方竖图和横图回退、TMDB 结果置信度、正负缓存失效时间及并发任务结果顺序。
+
+**安装方式：** 在 CapyPlayer 组件管理粘贴固定安装 URL。组件返回 **TMDB 详情条目**，不解析或绕过芒果TV播放保护；若 TMDB 无可靠匹配，部分作品可能缺失。芒果 TV 片库筛选 ID、图片字段可能随着接口调整而改变。
+
+**验证范围：** 已通过 JavaScript 语法检查及模拟接口测试；尚未完成芒果TV线上接口响应和 Android CapyPlayer 真机的端到端验收。在仓库执行 `node --test tests/mgtv-widget.test.js` 可进行本地模拟回归。
+
+---
+
+
 ## 优酷片库 v1.3.0 — CapyPlayer Widget
 
 **固定安装 URL：** https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/youku.js
