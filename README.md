@@ -1,5 +1,20 @@
 # CapyPlayer 组件仓库
 
+## 爱奇艺片库 v1.1.0 — CapyPlayer Widget
+
+**固定安装 URL：** https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/iqiyi.js
+
+**源码：** [widgets/iqiyi.js](widgets/iqiyi.js)
+
+基于原 MakkaPakka 爱奇艺组件升级，保留组件 ID `iqiyi.video.pc.makka` 和电视剧、电影、综艺、动漫、纪录片、少儿六个分类。增加爱奇艺图标，修正综合排序默认值，电视剧/电影增加 2025 和 2026 年份选项，保留地区/类型/资费组合筛选；优化页码、解析结构、海报回退、TMDB 匹配阈值、并发顺序与缓存。
+
+**安装：** 在 CapyPlayer「组件」页面粘贴安装 URL，预览后安装。该组件输出 **TMDB 媒体条目**，用于展示与查看详情，**不包含爱奇艺播放流解析**；TMDB 无可信匹配时条目可能被跳过。
+
+**验证：** 已完成 JavaScript 语法及模拟接口回归测试，未完成真实爱奇艺 API/安卓 CapyPlayer 真机的端到端验证。上游筛选 ID、图片字段等有变化时应通过实际响应继续适配。可用 `node --test tests/iqiyi-widget.test.js` 运行自动模拟测试。
+
+---
+
+
 ## 腾讯视频片库 v1.1.0 — CapyPlayer Widget
 
 **固定安装 URL：** https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/qq.js
