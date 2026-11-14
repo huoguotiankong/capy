@@ -225,7 +225,7 @@ async function hgHomeCategory(route) {
 }
 
 async function hgGet(url, headers) {
-  var response = await Widget.http.get(url, { headers: headers || HG_HEADERS, timeout: 25000 });
+  var response = await Widget.http.get(url, { headers: headers || HG_HEADERS, timeout: 8500 });
   if (!response || !response.ok) throw new Error("HTTP " + (response ? response.status : "no response") + " " + url);
   return response.data;
 }
@@ -254,6 +254,18 @@ async function hgCategory(route, params) {
       if(fromHTML.length){console.warn("[红果] 分类 HTML 兜底",route,fromHTML.length);return fromHTML;}
     }catch(e){errors.push(String(e));}
   }
+  // In particular, /category/comic sometimes responds with challenge HTML
+  // for Android UA. Retry once as a crawler before returning an empty array.
+  if(route==="comic" && page===1)try {
+    var bot=await hgPageResponse(base,true);
+    if(bot.router){
+      var raw=hgLoader(bot.router,"category_$");
+      var items=hgMediaList(raw.recommendList);
+      if(items.length)return items;
+    }
+    var htmlItems=hgCardsHTML(bot.html);
+    if(htmlItems.length)return htmlItems;
+  }catch(e){errors.push(String(e));}
   if(page===1 && !genre)try {
     var home=await hgHomeCategory(route);
     if(home.length){console.warn("[红果] 分类首页板块兜底",route,home.length);return home;}
