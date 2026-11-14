@@ -1,35 +1,44 @@
 # CapyPlayer 组件仓库
 
-CapyPlayer 组件集中在 `widgets/`，可选播放辅助服务在 `server/`。
+此仓库集中维护卡皮巴拉 JavaScript 组件；可直接安装的脚本在 `widgets/`。
 
-## 红果短剧 v0.3.0（局域网播放桥接测试版）
+## 红果短剧 v0.4.0 — 无电脑纯组件版
 
-- 组件固定安装 URL：https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/hongguo.js
-- 组件源码：[widgets/hongguo.js](widgets/hongguo.js)
-- 桥接服务：[server/bridge.py](server/bridge.py)
-- Windows 使用说明：[server/README.md](server/README.md)
-- CapyPlayer 官方组件开发文档：https://capyplayer.feifeiduck.com/zh/dev/widget/widgetdev
+**固定安装 URL：** https://raw.githubusercontent.com/huoguotiankong/capy/main/widgets/hongguo.js
 
-### 问题根因
+**源码：** [widgets/hongguo.js](widgets/hongguo.js)
 
-原 TVBox/FongMi Python 源使用签名取流、加密视频处理和 HTTP Range 本地服务器，纯 CapyPlayer JS 沙箱不能直接实现全部操作。v0.2.1 对官网公开直链的尝试在手机端仍无法稳定获取视频，因此 v0.3.0 添加**需要单独运行**的本地播放服务。
+### 已开发（目录与导航）
 
-### 配置方法
+- 首页热播、真人剧、漫剧、AI 剧、漫画；题材、分页。
+- 按关键词搜索短剧、新增「系列换季搜索」模块；相同剧名的季按季号排序。
+- 详情页的海报、简介、演员/标签（按官网返回情况）；解析季号、剧集 ID。
+- 关联季同时参考官网播放页和搜索 API；在详情页「类似作品」中点击跳转另一季。
+- 官网播放页**直接公开、且可由普通播放器识别**的资源：作为候选播放项返回。若相关季也提供公开直链，则可组成原生 `seasons` 多季列表。
 
-1. 下载本次对话中的 `capy_hongguo_bridge_v0.3.0.zip` 并解压，包含原 PY 源、桥接器和测试。
-2. Windows 10 / 11 按 [server/README.md](server/README.md) 安装依赖、启动服务，记录服务所在电脑的 LAN IP 和随机口令。
-3. 在组件全局参数填入 `hgBridgeUrl=http://192.168.1.10:8931`（换成实际 IP）与 `hgBridgeToken=<启动服务时输出的口令>`。
-4. 刷新组件列表以保存参数，再打开短剧详情。组件检测服务状态，预热前几集，并为可获取 `vid_list` 的剧集提供桥接播放线路。
+### 已知限制（重要）
 
-### 当前限制
+**不依赖电脑，但不等于红果全集已能播放。**
 
-- 需要电脑持续开机、同一局域网，尚未部署云服务。
-- 仅验证 Python 桥接协议中的 HTTP Range/206、HEAD、口令认证与健康检查；**真实红果取流和卡皮巴拉安卓播放仍待验证**。
-- 原生多季选集依赖真实的季集和可用播放资源；当前其他季可以通过详情页的相关推荐跳转。
-- 不要将服务端口直接开放到公网，不要把访问口令上传到公开 GitHub；仅用于合法授权内容。
+原始红果视频多数采用 CENC 受保护 MP4。`openhongguo` SDK 能返回播放模型，但拿到加密媒体 URL 并不代表 CapyPlayer 普通播放器可以解码。`kaixinguo-android` 使用 Android 原生 Media3 的自定义 CENC DataSource，不能原样移植到纯 Widget 沙箱。当前公开 Widget API 未提供自定义原生视频 DataSource 或完整受保护视频流处理。缺少直链时，资源区可能依然显示「暂无可播放资源」，这是已知限制，不是需要配置电脑。
 
-### 历史版本
+当季无公开播放地址时，原生多季选集也不会强行显示空的选集；用户可以通过「类似作品」跳转其他季。
 
-- v0.1.1：修复分类/详情 HTML 解析与图标。
-- v0.2.1：公开集直链尝试、跨季推荐导航。
-- v0.3.0：桥接地址/口令设置、健康检查、播放会话预热和独立 Windows LAN 服务。
+该版本还**未通过红果真实视频播放与 CapyPlayer Android 真机端到端验收**；自动测试只验证 JS 的数据契约和模拟官网响应。
+
+### 安装与升级
+
+1. 在 CapyPlayer 组件管理中添加上述 Raw URL，或检查已安装组件更新。
+2. 如仍看到旧的局域网桥接参数，可以删除旧组件并重新使用相同 URL 安装，刷新首页缓存。
+3. 点击「系列换季搜索」输入剧名测试排序；详情页的「类似作品」用于切换同系列。
+4. 检查「资源」区域有无普通直链；如仍显示空，说明没有取得可直接播放的流，不要使用伪造播放地址。
+
+### 版本与参考
+
+- `archive/hongguo-lan-v0.3.0.js`：实验性 Windows LAN 桥接旧版，仅存档，不作为当前组件使用。
+- `server/`：过去的播放桥接实验代码，不是 v0.4.0 的依赖。
+- [CapyPlayer 官方组件开发指南](https://capyplayer.feifeiduck.com/zh/dev/widget/widgetdev)
+- [openhongguo](https://github.com/beilunyang/openhongguo)：数据模型与季/合集概念参考。
+- [kaixinguo-android](https://github.com/kadaliao/kaixinguo-android)：手机端原生媒体处理架构参考。
+
+仅用于学习与个人使用；请尊重视频版权与平台访问规则。
