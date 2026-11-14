@@ -46,7 +46,7 @@ var WidgetMetadata = {
   title: "红果短剧 · API试验版",
   description: "独立测试入口；在已获授权的服务账号与 Vercel 签名后端就绪时尝试临时播放地址。",
   author: "MX / huoguotiankong",
-  version: "0.5.0-beta.2",
+  version: "0.5.0-beta.3",
   icon: "https://syimg.3dmgame.com/uploadimg/ico/2024/0524/1716534162709037.png",
   site: HG_SITE,
   globalParams:[
@@ -689,8 +689,12 @@ async function loadDetailSite(link) {
 function hgApiRemember(params) {
   params=params||{};
   try {
-    if (typeof params.hgApiBase==="string") Widget.storage.set("mx.hg.xyb.base",params.hgApiBase.trim());
-    if (typeof params.hgApiKey==="string") Widget.storage.set("mx.hg.xyb.key",params.hgApiKey.trim());
+    // Global parameters may be passed as empty defaults on every module
+    // invocation. Do not erase previously saved configuration.
+    if (typeof params.hgApiBase==="string" && params.hgApiBase.trim())
+      Widget.storage.set("mx.hg.xyb.base",params.hgApiBase.trim());
+    if (typeof params.hgApiKey==="string" && params.hgApiKey.trim())
+      Widget.storage.set("mx.hg.xyb.key",params.hgApiKey.trim());
   } catch(e){console.warn("[API测试] 配置存储失败",String(e));}
 }
 function hgApiConfig() {
