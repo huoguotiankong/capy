@@ -1,4 +1,4 @@
-/* CapyPlayer Jable.tv Widget v1.0.0
+/* CapyPlayer Jable.tv Widget v1.0.1
  * Official contract: https://capyplayer.feifeiduck.com/zh/dev/widget/widgetdev
  * No external server or credentials required; third-party availability is not guaranteed.
  */
@@ -10,7 +10,7 @@ var JB_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
 };
 var JB_TAGS = [
-  { title: "Cosplay", value: "cosplay" },
+  { title: "Cosplay", value: "Cosplay" },
   { title: "女仆", value: "maid" },
   { title: "兔女郎", value: "bunny-girl" },
   { title: "泳装", value: "swimsuit" },
@@ -26,9 +26,8 @@ var WidgetMetadata = {
   title: "Jable",
   description: "Jable 最近更新、热门、关键词搜索、标签筛选及视频 HLS 直链解析。仅限成年人；需可访问原站。",
   author: "MX / huoguotiankong",
-  version: "1.0.0",
+  version: "1.0.1",
   site: JB_SITE,
-  icon: JB_SITE + "/favicon.ico",
   modules: [
     {
       id: "jb_latest", title: "最近更新", type: "media_list",
@@ -47,7 +46,7 @@ var WidgetMetadata = {
       functionName: "getJableTag", cacheDuration: 900,
       timeoutSeconds: 30, retryCount: 1,
       params: [
-        { name: "tag", label: "选择标签", type: "enum", defaultValue: "cosplay", enumOptions: JB_TAGS },
+        { name: "tag", label: "选择标签", type: "enum", defaultValue: "Cosplay", enumOptions: JB_TAGS },
         { name: "page", label: "页码", type: "page" }
       ]
     },
@@ -183,13 +182,38 @@ function jbListParse(html) {
 function jbPageURL(path, page) {
   return JB_SITE + path + (page > 1 ? (path.indexOf("?") >= 0 ? "&" : "?") + "page=" + page : "");
 }
+function jbErrorStatus(err) {
+  var e = err || {};
+  var response = e.response || {};
+  var code = Number(response.statusCode || response.status ||
+    e.statusCode || e.status || 0);
+  if (code >= 100 && code <= 599) return code;
+  var text = jbStr(e.message || e);
+  var m = /(?:status code(?: of|:)?|statusCode\s*[:=]|HTTP\s*)(?:\s+)?([1-5]\d\d)\b/i.exec(text);
+  return m ? Number(m[1]) : 0;
+}
+function jbHTTPError(status, url, cause) {
+  var suffix = " (" + url.replace(/\?.*$/, "") + ")";
+  if (status === 403 || status === 429 || status === 503) {
+    return new Error("Jable HTTP " + status + "：站点拒绝独立HTTP请求，可能是Cloudflare验证/访问限制。请先在手机浏览器检查 jable.tv；普通组件无法自动通过网站的人机挑战。" + suffix);
+  }
+  if (status) return new Error("Jable HTTP " + status + "：源站请求失败" + suffix);
+  return new Error("Jable 连接失败：" + jbStr(cause && (cause.message || cause)).slice(0, 180) + suffix);
+}
 async function jbHTML(url) {
-  var r = await Widget.http.get(url, { headers: JB_HEADERS, timeout: 25000 });
-  if (!r || !r.ok) throw new Error("Jable HTTP " + (r ? r.status : "no response"));
+  var r;
+  try {
+    r = await Widget.http.get(url, { headers: JB_HEADERS, timeout: 25000 });
+  } catch (err) {
+    var code = jbErrorStatus(err);
+    console.error("Jable HTTP 请求异常", code || "unknown", url.replace(/\?.*$/, ""));
+    throw jbHTTPError(code, url, err);
+  }
+  if (!r || !r.ok) throw jbHTTPError(Number(r && r.status) || 0, url);
   var html = typeof r.data === "string" ? r.data : jbStr((r.data || {}).html || (r.data || {}).body || "");
-  if (!html) throw new Error("Jable 返回空页面");
+  if (!html) throw new Error("Jable 返回空页面：" + url);
   if (/(?:cf-chl-|Just a moment|Checking your browser|Attention Required|captcha-delivery)/i.test(html)) {
-    throw new Error("Jable 触发了反爬验证，请确认网站可在设备上直接打开");
+    throw new Error("Jable 页面触发了Cloudflare人机验证：独立组件请求无法完成浏览器验证");
   }
   return html;
 }
@@ -208,7 +232,7 @@ async function jbList(path, params) {
 async function getJableLatest(params) { return jbList("/latest-updates/", params); }
 async function getJableHot(params) { return jbList("/hot/", params); }
 async function getJableTag(params) {
-  var tag = jbStr((params || {}).tag || "cosplay").toLowerCase();
+  var tag = jbStr((params || {}).tag || "Cosplay");
   if (!/^[a-z0-9-]{1,64}$/.test(tag)) throw new Error("无效的 Jable 标签");
   return jbList("/tags/" + tag + "/", params);
 }
